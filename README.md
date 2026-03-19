@@ -13,7 +13,7 @@ Task-Specialized Distillation</h1>
         <a >Yongjie Hou <sup>*</sup></a>&nbsp;
         <a >Yang Li <sup>*</sup></a>&nbsp;
         <a >Qirui Wang <sup>*</sup></a>&nbsp;
-        <a >Youyang Sha</a>&nbsp;
+        <a >Youyang Sha</a>&nbsp; </br>
         <a >Yongjun Yu</a>&nbsp;
         <a >Yinzhi Wang</a>&nbsp;
         <a >Peizhe Ru</a>&nbsp;
@@ -38,11 +38,10 @@ Task-Specialized Distillation</h1>
 - **[2026-03-19]** Initial release of EdgeCrafter.
 
 ---
-## 📍Implementations
+## 📍 Reproducing the Results
 
-#### For Detection and Segmentation: [Code & Weights](./ecdetseg)
-
-#### For Pose: [Code & Weights](./ecpose)
+- **Detection & Segmentation:** [Instructions](./ecdetseg)
+- **Pose Estimation:** [Instructions](./ecpose)
 
 ---
 
