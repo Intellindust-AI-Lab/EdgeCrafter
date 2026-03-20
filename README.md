@@ -40,7 +40,7 @@ Task-Specialized Distillation</h1>
 ---
 ## 📍 Reproducing the Results
 
-- **Detection & Segmentation:** [Instructions](./ecdetseg)
+- **Detection & Instance Segmentation:** [Instructions](./ecdetseg)
 - **Pose Estimation:** [Instructions](./ecpose)
 
 ---
