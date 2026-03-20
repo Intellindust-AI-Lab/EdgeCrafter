@@ -570,7 +570,7 @@ class MixUp(object):
         """Compute visibility ratio based on keypoint visibility."""
         vis = keypoints[..., 2]
         vis_ratio = torch.ones_like(vis, dtype=torch.float32)
-        vis_ratio[vis == 2] = alpha
+        vis_ratio[vis == 2] = alpha # only concern visible keypoints(v == 2)
         return vis_ratio
     
     def _compute_occlusion_ratio(self, target1: dict, target2: dict, 
@@ -658,94 +658,36 @@ class MixUp(object):
 
 @register()
 class CopyPaste(object):
-    def __init__(self, p=1.0, beta_range=(0.45, 0.55), max_cached_images=50, 
-                 experiment_type=None, partial_threshold=0.67, crop_prob=1):
-        """
-        Enhanced CopyPaste for controlled complete/partial person experiments.
-
-        Args:
-            p: application probability.
-            beta_range: blending ratio range.
-            max_cached_images: maximum number of cached images.
-            experiment_type: one of ('complete', 'partial', None).
-                - 'complete': sample only complete persons (visible ratio > partial_threshold).
-                - 'partial': sample persons and apply crop simulation for partial cases.
-                - None: default random behavior without completeness filtering.
-            partial_threshold: threshold used to separate complete vs partial persons.
-            crop_prob: crop probability used for complete persons in partial mode.
-        """
+    def __init__(self, p=1.0, beta_range=(0.45, 0.55), max_cached_images=50):
         self.p = p
         self.beta_range = beta_range
         self.max_cached_images = max_cached_images
-        self.experiment_type = experiment_type
-        self.partial_threshold = partial_threshold
-        self.crop_prob = crop_prob
         self.copypaste_cache = []
 
-    def _get_random_patch(self, img, bbox):
+    def _extract_patch(self, img, bbox):
         x1, y1, x2, y2 = map(int, bbox)
         return img.crop((x1, y1, x2, y2)), (x1, y1, x2 - x1, y2 - y1)
-    
-    def _analyze_keypoint_visibility(self, keypoints):
-        """
-        Analyze keypoint visibility statistics.
 
-        Args:
-            keypoints: keypoint list, each keypoint is [x, y, visibility].
-
-        Returns:
-            dict: visibility statistics summary.
-        """
-        visibilities = [kpt[2] for kpt in keypoints]
-        # print(f"Debug - CopyPaste: visibilities={visibilities}")
-        
-        visible_count = sum(1 for v in visibilities if v > 0)
-        total_count = len(visibilities)
-        visibility_ratio = visible_count / total_count if total_count > 0 else 0.0
-        
-        result = {
-            'visible_count': visible_count,
-            'total_count': total_count,
-            'visibility_ratio': visibility_ratio,
-            'is_complete': visibility_ratio > self.partial_threshold,
-            'is_partial': visibility_ratio <= self.partial_threshold
-        }
-        
-        # print(f"Debug - CopyPaste: keypoint analysis - visible={visible_count}/{total_count}, ratio={visibility_ratio:.2f}, is_complete={result['is_complete']}, is_partial={result['is_partial']}, threshold={self.partial_threshold}")
-        
-        return result
-    
     def _crop_keypoints(self, keypoints, crop_bbox, img_bbox):
-        """
-        Crop keypoints to simulate partial-person visibility.
-
-        Args:
-            keypoints: original keypoints with shape (17, 3).
-            crop_bbox: crop region (x1, y1, x2, y2).
-            img_bbox: image bbox boundary (x1, y1, x2, y2).
-
-        Returns:
-            list: cropped keypoints with shape (17, 3).
-        """
         cx1, cy1, cx2, cy2 = crop_bbox
         ix1, iy1, ix2, iy2 = img_bbox
-        
+
         cx1 = max(cx1, ix1)
         cy1 = max(cy1, iy1)
         cx2 = min(cx2, ix2)
         cy2 = min(cy2, iy2)
-        
+
         cropped_keypoints = []
         for kpt in keypoints:
             x, y, v = kpt[0], kpt[1], kpt[2]
-            
-            if (cx1 <= x <= cx2 and cy1 <= y <= cy2 and v > 0):
+
+            if cx1 <= x <= cx2 and cy1 <= y <= cy2 and v > 0:
                 new_x = x - cx1
                 new_y = y - cy1
                 cropped_keypoints.append([new_x, new_y, v])
             else:
                 cropped_keypoints.append([0, 0, 0])
-        
+
         return cropped_keypoints
 
     def _adjust_keypoints(self, keypoints, src_bbox, dst_pos):
@@ -763,55 +705,37 @@ class CopyPaste(object):
         return adjusted
 
     def _check_keypoint_coverage(self, keypoints, paste_region):
-        dx, dy, dx_sw, dy_sh = paste_region
+        x1, y1, x2, y2 = paste_region
         x, y = keypoints[:, :, 0], keypoints[:, :, 1]
-        in_region = (x >= dx) & (x <= dx_sw) & (y >= dy) & (y <= dy_sh)
+        in_region = (x >= x1) & (x <= x2) & (y >= y1) & (y <= y2)
         return in_region
 
     def _select_random_objects(self, target, num_objects=3):
         if 'boxes' not in target or len(target['boxes']) == 0:
             return []
-        
+
         valid_objects = []
         if 'area' in target:
             for i, area in enumerate(target['area']):
                 if area > 0:
                     keypoints = target['keypoints'][i].tolist()
-                    vis_info = self._analyze_keypoint_visibility(keypoints)
-                    
+
                     obj = {
                         'bbox': target['boxes'][i].tolist(),
                         'keypoints': keypoints,
                         'area': area.item(),
                         'labels': target['labels'][i].item(),
                         'iscrowd': target['iscrowd'][i].item(),
-                        'visibility_info': vis_info
                     }
                     valid_objects.append((i, obj))
-        
+
         if not valid_objects:
             return []
-        
-        # print(f"Debug - CopyPaste: experiment_type={self.experiment_type}, valid_objects_count={len(valid_objects)}")
-        
-        if self.experiment_type == 'complete':
-            complete_objects = [(i, obj) for i, obj in valid_objects if obj['visibility_info']['is_complete']]
-            #print(f"Debug - CopyPaste: complete_objects_count={len(complete_objects)}")
-            if not complete_objects:
-                return []
-            selected_objects = random.sample(complete_objects, min(num_objects, len(complete_objects)))
-            
-        elif self.experiment_type == 'partial':
-            selected_objects = random.sample(valid_objects, min(num_objects, len(valid_objects)))
-            # print(f"Debug - CopyPaste: selected {len(selected_objects)} objects for partial mode (will be cropped)")
-            
-        else:
-            selected_objects = random.sample(valid_objects, min(num_objects, len(valid_objects)))
-            # print(f"Debug - CopyPaste: selected {len(selected_objects)} random objects")
-        
+
+        selected_objects = random.sample(valid_objects, min(num_objects, len(valid_objects)))
         return [obj for _, obj in selected_objects]
 
-    def __call__(self, img, target, dataset=None):
+    def __call__(self, img, target):
         if random.random() > self.p or 'boxes' not in target:
             return img, target
 
@@ -841,45 +765,10 @@ class CopyPaste(object):
         selected = random.sample(all_objects_with_source, min(3, len(all_objects_with_source)))
 
         for item in selected:
-            obj = item['obj']
+            obj = copy.deepcopy(item['obj'])
             source_img = item['source_img']
-            
-            should_crop = False
-            if self.experiment_type == 'partial' and obj['visibility_info']['is_complete']:
-                should_crop = True
-            
-            if should_crop:
-                original_bbox = obj['bbox']
-                x1, y1, x2, y2 = original_bbox
-                w, h = x2 - x1, y2 - y1
-                
-                crop_ratio = random.uniform(0.3, 0.8)
-                crop_w = int(w * crop_ratio)
-                crop_h = int(h * crop_ratio)
-                
-                crop_x1 = x1 + random.randint(0, max(0, int(w - crop_w)))
-                crop_y1 = y1 + random.randint(0, max(0, int(h - crop_h)))
-                crop_x2 = crop_x1 + crop_w
-                crop_y2 = crop_y1 + crop_h
-                
-                obj['bbox'] = [crop_x1, crop_y1, crop_x2, crop_y2]
-                obj['keypoints'] = self._crop_keypoints(
-                    obj['keypoints'], 
-                    (crop_x1, crop_y1, crop_x2, crop_y2),
-                    (x1, y1, x2, y2)
-                )
-                obj['area'] = crop_w * crop_h
-                
-                obj['visibility_info']['is_complete'] = False
-                obj['visibility_info']['is_partial'] = True
-                cropped_keypoints = obj['keypoints']
-                visibilities = [kpt[2] for kpt in cropped_keypoints]
-                visible_count = sum(1 for v in visibilities if v > 0)
-                total_count = len(visibilities)
-                obj['visibility_info']['visibility_ratio'] = visible_count / total_count if total_count > 0 else 0.0
-                obj['visibility_info']['visible_count'] = visible_count
 
-            patch, (sx, sy, sw, sh) = self._get_random_patch(source_img, obj['bbox'])
+            patch, (sx, sy, sw, sh) = self._extract_patch(source_img, obj['bbox'])
             if patch.size[0] == 0 or patch.size[1] == 0:
                 continue
 
@@ -932,7 +821,6 @@ class CopyPaste(object):
                 augmented_target['iscrowd'],
                 torch.tensor([obj['iscrowd']], dtype=torch.int64)
             ])
-            
 
             adjusted_kpts_tensor = torch.tensor([adjusted_kpts], dtype=torch.float32)
             new_vis = adjusted_kpts_tensor[..., 2].squeeze(0) > 0
@@ -955,8 +843,7 @@ class CopyPaste(object):
 
 @register()
 class MixUpCopyPaste(object):
-    def __init__(self, mixup_prob=0.5, copypaste_prob=1, max_cached_images=50, random_pop=True,
-                 experiment_type=None, partial_threshold=0.67, crop_prob=1):
+    def __init__(self, mixup_prob=0.5, copypaste_prob=1, max_cached_images=50, random_pop=True):
         self.mixup_prob = mixup_prob
         self.copypaste_prob = copypaste_prob
         
@@ -964,9 +851,6 @@ class MixUpCopyPaste(object):
         self.copypaste = CopyPaste(
             p=copypaste_prob, 
             max_cached_images=max_cached_images,
-            experiment_type=experiment_type,
-            partial_threshold=partial_threshold,
-            crop_prob=crop_prob
         )
         
     def __call__(self, img, target):
@@ -980,16 +864,9 @@ class MixUpCopyPaste(object):
 
 @register()
 class PoseMosaic(object):
-    def __init__(self, output_size=320, max_size=None, probability=1.0, 
-        use_cache=False, max_cached_images=50, random_pop=True) -> None:
+    def __init__(self, output_size=320, max_size=None,) -> None:
         super().__init__()
         self.resize = RandomResize(sizes=[output_size], max_size=max_size)
-        self.probability = probability
-
-        self.use_cache = use_cache
-        self.mosaic_cache = []
-        self.max_cached_images = max_cached_images
-        self.random_pop = random_pop
 
     def load_samples_from_dataset(self, image, target, dataset):
         """Loads and resizes a set of images and their corresponding targets."""
@@ -1055,16 +932,7 @@ class PoseMosaic(object):
         Returns:
             tuple: Augmented (image, target, dataset).
         """
-        # Skip mosaic augmentation with probability 1 - self.probability
-        if self.probability < 1.0 and random.random() > self.probability:
-            return image, target
-        # Prepare mosaic components
-        if self.use_cache:
-            mosaic_samples, max_height, max_width = self.load_samples_from_cache(image, target, self.mosaic_cache)
-            mosaic_image, mosaic_target = self.create_mosaic_from_cache(mosaic_samples, max_height, max_width)
-        else:
-            resized_images, resized_targets, max_height, max_width = self.load_samples_from_dataset(image, target,dataset)
-            mosaic_image, mosaic_target = self.create_mosaic_from_dataset(resized_images, resized_targets, max_height, max_width)
+        resized_images, resized_targets, max_height, max_width = self.load_samples_from_dataset(image, target,dataset)
+        mosaic_image, mosaic_target = self.create_mosaic_from_dataset(resized_images, resized_targets, max_height, max_width)
 
         return mosaic_image, mosaic_target
-

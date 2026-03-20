@@ -58,7 +58,7 @@ train_dataloader:
   dataset: 
     transforms:
       ops:
-        - {type: PoseMosaic, output_size: 320, probability: 1.0}
+        - {type: PoseMosaic, output_size: 320}
         - {type: MixUpCopyPaste, mixup_prob: 0.5}
         - {type: RandomZoomOut, p: 0.5}
         - {type: RandomHorizontalFlip}

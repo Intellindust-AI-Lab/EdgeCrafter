@@ -63,9 +63,6 @@ class PoseSolver(BaseSolver):
             print(f'Resume checkpoint from {self.cfg.resume}')
             self.load_resume_state(self.cfg.resume)
 
-        if hasattr(self.cfg, "pretrain"):
-            self.pretrain(self.cfg.pretrain)
-
     def fit(self,):
         self.train()
         args = self.cfg
@@ -91,7 +88,7 @@ class PoseSolver(BaseSolver):
         # evaluate again before resume training
         if self.last_epoch > 0:
             module = self.ema.module if self.ema else self.model
-            test_stats, coco_evaluator = evaluate(
+            test_stats = evaluate(
                 module,
                 self.postprocessor,
                 self.evaluator,
@@ -157,7 +154,7 @@ class PoseSolver(BaseSolver):
             
             # eval ema model if exists
             if self.ema is not None:
-                test_stats, coco_evaluator = evaluate(
+                test_stats = evaluate(
                     self.ema.module, 
                     self.postprocessor, 
                     self.evaluator,
@@ -172,7 +169,7 @@ class PoseSolver(BaseSolver):
                 eval_stats = test_stats
             else:
                 # eval regular model
-                test_stats, coco_evaluator = evaluate(
+                test_stats = evaluate(
                     self.model, 
                     self.postprocessor, 
                     self.evaluator,
@@ -256,63 +253,15 @@ class PoseSolver(BaseSolver):
     def val(self, ):
         self.eval()
         module = self.ema.module if self.ema else self.model
-        test_stats, coco_evaluator = evaluate(
+        test_stats = evaluate(
                 module,
                 self.postprocessor,
                 self.evaluator,
                 self.val_dataloader,
                 self.device,
-                multi_decoder_eval=False
             )
 
         # if self.output_dir:
         #     dist_utils.save_on_master(coco_evaluator.coco_eval["keypoints"].eval, self.output_dir / "eval.pth")
 
         return
-
-    def pretrain(self, model_path):
-        try:
-            state = torch.load(model_path, map_location="cpu", weights_only=False)
-
-            if "ema" in state:
-                print("USING EMA WEIGHTS!!!")
-                pretrain_state_dict = state["ema"]["module"]
-            else:
-                pretrain_state_dict = state["model"]
-            
-            new_state_dict = {}
-            for k in pretrain_state_dict:
-                if ("decoder" in k):
-                    continue
-                new_state_dict[k] = state['model'][k]
-
-            print(f"⚠️  Loading weights for the backbone and decoder from {model_path} ⚠️")
-            missing_keys, unexpected_keys = self.model_without_ddp.load_state_dict(new_state_dict, strict=False)
-
-            if len(unexpected_keys) > 0:
-                print("Warning. The following RTGroupPose does not have the following parameters:")
-                for k in unexpected_keys:
-                    print(f"    - {k}")
-            else:
-                print(f'✅ Successfully initilized the backbone and encoder using {model_name} weights ✅')
-
-            missing_keys, unexpected_keys = self.ema.module.load_state_dict(new_state_dict, strict=False)
-
-        except (Exception, KeyboardInterrupt) as e:
-            if safe_get_rank() == 0:
-                print(f"{str(e)}")
-                logging.error(
-                    RED + "CRITICAL WARNING: Failed to load pretrained HGNetV2 model" + RESET
-                )
-                logging.error(
-                    GREEN
-                    + "Please check your network connection. Or download the model manually from "
-                    + RESET
-                    + f"{download_url}"
-                    + GREEN
-                    + " to "
-                    + RESET
-                    + f"{local_model_dir}."
-                    + RESET
-                )
-            exit()

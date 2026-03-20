@@ -106,8 +106,6 @@ class YAMLConfig(BaseConfig):
                 from ..data import get_coco_api_from_dataset
                 base_ds = get_coco_api_from_dataset(self.val_dataloader.dataset)
                 self._evaluator = create('evaluator', self.global_cfg, coco_gt=base_ds)
-            elif self.yaml_cfg['evaluator']['type'] == 'CrowdPoseEvaluator':
-                self._evaluator = create('evaluator', self.global_cfg, ann_file='/data4022/wangqirui/CrowdPose/json/crowdpose_val.json', iou_types=['keypoints'])
             else:
                 raise NotImplementedError(f"{self.yaml_cfg['evaluator']['type']}")
         return super().evaluator

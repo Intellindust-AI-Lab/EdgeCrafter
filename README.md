@@ -3,7 +3,7 @@ Task-Specialized Distillation</h1>
 
 <p align="center">
   <a href="https://intellindust-ai-lab.github.io/projects/EdgeCrafter/"><img src="https://img.shields.io/badge/Webpage-EdgeCrafter-blue.svg" alt="Webpage"></a>
-  <a href="#"><img src="https://img.shields.io/badge/arXiv-EdgeCrafter-orange.svg" alt="arXiv"></a>
+  <a href="https://arxiv.org/pdf/2603.18739"><img src="https://img.shields.io/badge/arXiv-EdgeCrafter-orange.svg" alt="arXiv"></a>
   <a href="#"><img src="https://img.shields.io/badge/License-Apache%202.0-green.svg" alt="License"></a>
 
 </p>

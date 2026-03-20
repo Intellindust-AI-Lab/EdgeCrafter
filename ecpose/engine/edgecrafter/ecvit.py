@@ -28,8 +28,7 @@ __all__ = ['ViTAdapter', ]
 def safe_get_rank():
     if torch.distributed.is_available() and torch.distributed.is_initialized():
         return torch.distributed.get_rank()
-    else:
-        return 0
+    return 0
 
 
 class RopePositionEmbedding(nn.Module):

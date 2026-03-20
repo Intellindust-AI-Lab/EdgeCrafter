@@ -134,23 +134,14 @@ def train_one_epoch(self_lr_scheduler,
 
 
 @torch.no_grad()
-def evaluate(model, postprocessors, coco_evaluator, data_loader, device, writer=None, save_results=False, multi_decoder_eval=False):
+def evaluate(model, postprocessors, coco_evaluator, data_loader, device, writer=None, save_results=False):
     model.eval()
-    if multi_decoder_eval:
-        model.transformer.eval_aux = True
     if coco_evaluator is not None:
         coco_evaluator.cleanup()
 
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Test:'
     res_json = [] 
-
-    layer_evaluators = None
-    if multi_decoder_eval and coco_evaluator is not None:
-        from copy import deepcopy
-        layer_evaluators = []
-        for i in range(6):
-            layer_evaluators.append(deepcopy(coco_evaluator))
 
     for samples, targets in metric_logger.log_every(data_loader, 10, header):
         samples = samples.to(device)
@@ -164,14 +155,6 @@ def evaluate(model, postprocessors, coco_evaluator, data_loader, device, writer=
         res = {target['image_id'].item(): output for target, output in zip(targets, results)}
         if coco_evaluator is not None:
             coco_evaluator.update(res)
-
-        if multi_decoder_eval and 'aux_outputs' in outputs:
-            for i, aux_out in enumerate(outputs['aux_outputs']):
-                if i >= len(layer_evaluators):
-                    break
-                aux_results = postprocessors(aux_out, orig_target_sizes)
-                aux_res = {target['image_id'].item(): output for target, output in zip(targets, aux_results)}
-                layer_evaluators[i].update(aux_res)
 
         if save_results:
             for k, v in res.items():
@@ -195,18 +178,6 @@ def evaluate(model, postprocessors, coco_evaluator, data_loader, device, writer=
     if coco_evaluator is not None:
         coco_evaluator.synchronize_between_processes()
 
-    layer_stats = []
-    if multi_decoder_eval and layer_evaluators is not None:
-        for i, evaluator_i in enumerate(layer_evaluators):
-            if len(getattr(evaluator_i, "img_ids", [])) == 0:
-                print(f"[Warning] Decoder layer {i} has no eval images, skip synchronization.")
-                continue
-            evaluator_i.synchronize_between_processes()
-            evaluator_i.accumulate()
-            evaluator_i.summarize()
-            stats_i = evaluator_i.coco_eval['keypoints'].stats.tolist()
-            layer_stats.append((i, stats_i))
-
     if save_results:
         return res_json
 
@@ -218,8 +189,4 @@ def evaluate(model, postprocessors, coco_evaluator, data_loader, device, writer=
     stats = {k: meter.global_avg for k, meter in metric_logger.meters.items() if meter.count > 0}
     if coco_evaluator is not None:
         stats['coco_eval_keypoints'] = coco_evaluator.coco_eval['keypoints'].stats.tolist()
-
-    if multi_decoder_eval:
-        stats['decoder_layers'] = layer_stats
-
-    return stats, coco_evaluator
+    return stats
