@@ -35,14 +35,14 @@ Task-Specialized Distillation</h1>
 
 ## 🚀 Updates
 
-- **[2026-03-21]** We have uploaded our models on Hugging Face.
+- **[2026-03-21]** <a href="https://huggingface.co/Intellindust">We have uploaded our models on 🤗 Hugging Face</a>.
 - **[2026-03-19]** Initial release of EdgeCrafter.
 
 ---
 
 ## 🤗 Hugging Face
 
-We have uploaded our models on Hugging Face! You can access these models via [hf_models.ipynb](./hf_models.ipynb). Have a try!
+<a href="https://huggingface.co/Intellindust">We have uploaded our models on 🤗 Hugging Face</a>! You can also access these models via [hf_models.ipynb](./hf_models.ipynb). Have a try!
 
 ---
 
