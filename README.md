@@ -90,10 +90,6 @@ Task-Specialized Distillation</h1>
 ## 📦 Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/edgecrafter.git
-cd edgecrafter
-
 # Create conda environment
 conda create -n ec python=3.11 -y
 conda activate ec
