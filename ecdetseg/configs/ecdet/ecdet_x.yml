@@ -60,7 +60,6 @@ eval_spatial_size: [640, 640] # h w
 
 
 train_dataloader:
-  num_workers: 8
   dataset: 
     transforms:
       mosaic_epoch: 24
