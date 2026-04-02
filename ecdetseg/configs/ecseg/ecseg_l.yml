@@ -1,5 +1,5 @@
 __include__: [
-  '../dataset/coco_detection.yml',
+  '../dataset/coco.yml',
   '../ecdet/ecdet_l.yml',
   'ecseg.yml'
 ]

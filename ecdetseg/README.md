@@ -1,4 +1,8 @@
 
+<h3 align="center">
+  <b>English</b> | <a href="README_zh.md">简体中文</a>
+</h3>
+
 ## 📋 Table of Contents
 - [Model Zoo](#-model-zoo)
 - [Installation](#-installation)
@@ -59,10 +63,12 @@ python tools/inference/torch_inf.py -c configs/ecdet/ecdet_l.yml -r ecdet_l.pth 
 
 ### Custom Dataset
 
-To train on your custom dataset in the COCO format, modify the [custom_detection.yml](./configs/dataset/custom_detection.yml) configuration file:
+<details>
+  <summary><strong>Object Detection</strong></summary>
+  
+  To train on your custom detection dataset in the COCO format, modify the <a href="./configs/dataset/custom.yml">custom.yml</a> configuration file:
 
-```yaml
-task: detection
+<pre><code class="language-yaml">task: detection
 
 evaluator:
   type: CocoEvaluator
@@ -86,16 +92,22 @@ val_dataloader:
     img_folder: /path/to/your/dataset/val
     ann_file: /path/to/your/dataset/val/annotations.json
     ...
-```
+</code></pre>
 
-**Optional**: To output per-category AP during evaluation, set `verbose: True` in your dataset configuration:
+  <strong>Optional</strong>: To output per-category AP during evaluation, set <code>verbose: True</code> in your dataset configuration:
 
-```yaml
-evaluator:
+<pre><code class="language-yaml">evaluator:
   type: CocoEvaluator
   iou_types: ['bbox']
   verbose: True  # Output per-category AP
-```
+</code></pre>
+
+</details>
+
+<details close>
+  <summary><strong>Instance Segmentation</strong></summary>
+To train on a custom segmentation dataset in COCO format, simply follow the detection and update the <strong>img_folder</strong> and <strong>ann_file</strong> paths.
+</details>
 
 ### COCO2017 Dataset
 
@@ -115,7 +127,7 @@ To reproduce our results on COCO2017, follow these steps:
    └── val2017/
    ```
 
-3. **Update paths** in [coco_detection.yml](./configs/dataset/coco_detection.yml):
+3. **Update paths** in [coco.yml](./configs/dataset/coco.yml):
    ```yaml
    train_dataloader:
      dataset:
@@ -132,13 +144,15 @@ To reproduce our results on COCO2017, follow these steps:
 
 ## 🔌 Model Configuration
 
+### Object Detection
+
 Model configuration files are located in [configs/ecdet](./configs/ecdet/). Choose the appropriate configuration based on your computational budget and accuracy requirements.
 
-For custom datasets, you may need to adjust the following settings in your config file:
+For custom datasets, you may need to adjust specific parameters in your configuration file (e.g. **[ecdet_s.yml](./configs/ecdet/ecdet_s.yml)**):
 
 ```yaml
 __include__: [
-  '../dataset/coco_detection.yml',  # Base dataset configuration. Replace with custom_detection.yml when using a custom dataset
+  '../dataset/coco.yml',  # Base dataset configuration. Replace with custom.yml when using a custom dataset
   'ecdet.yml',                      
 ]
 
@@ -147,7 +161,7 @@ ViTAdapter:
   embed_dim: 192
   num_heads: 3
   interaction_indexes: [10, 11]     # Indices of transformer blocks used for feature interaction/fusion
-  weights_path: ecvits/ecvitt.pth   # Path to pretrained backbone weights
+  weights_path: ecvits/ecvitt.pth   # Pretrained backbone. Automatically downloaded on first use.
   skip_load_backbone: False         # If True, the backbone will be initialized from scratch (no pretrained weights)
 
 optimizer:
@@ -188,6 +202,24 @@ train_dataloader:
     mixup_prob: 0.75          # Probability of applying MixUp augmentation
     mixup_epoch: 36           # Apply MixUp augmentation until this epoch. Recommended to set this to half of stop_epoch
 ```
+
+### Instance Segmentation
+
+Model configuration files are located in [configs/ecseg](./configs/ecseg/). The configuration structure is identical to detection, but inherits from the detection config and adds segmentation-specific settings. 
+
+For custom datasets, you may need to adjust the following settings in your config file(e.g. **[ecseg_s.yml](./configs/ecseg/ecseg_s.yml)**):
+
+```yaml
+__include__: [
+  '../dataset/coco.yml',  # Base dataset configuration. Replace with custom.yml when using a custom dataset
+  '../ecdet/ecdet_s.yml',           # Inherit detection model configuration
+  'ecseg.yml',                      # Segmentation-specific configuration
+]
+
+train_dataloader:  # Add only the parameters you wish to override
+...
+```
+
 
 ---
 

@@ -1,8 +1,6 @@
 """
 EdgeCrafter: Compact ViTs for Edge Dense Prediction via Task-Specialized Distillation
 Copyright (c) 2026 The EdgeCrafter Authors. All Rights Reserved.
----------------------------------------------------------------------------------
-Pose inference script.
 """
 
 import concurrent.futures
@@ -20,7 +18,7 @@ import torch.nn as nn
 import torchvision.transforms as T
 from PIL import Image
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 from engine.core import YAMLConfig
 
 
@@ -39,7 +37,7 @@ COCO_SKELETON = [
     (2, 4), (3, 5), (4, 6), (5, 7),
 ]
 COCO_SKELETON = [(a - 1, b - 1) for a, b in COCO_SKELETON]
-IMAGE_SUFFIXES = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 
 def _decode_keypoints(keypoints: np.ndarray):
@@ -67,8 +65,20 @@ def _decode_keypoints(keypoints: np.ndarray):
     return np.zeros((0, 2), dtype=np.float32), np.zeros((0,), dtype=np.float32)
 
 
-def draw_pose(image: Image.Image, results, radius=3, line_thickness=2, draw_skeleton=True):
-    im_np = np.array(image).copy()
+def get_draw_params(image_shape: tuple[int, int, int]):
+    height, width = image_shape[:2]
+    min_side = max(1, min(height, width))
+    base = min_side / 640.0
+    font_scale = max(0.9, 0.95 * base)
+    text_thickness = max(2, int(round(1.6 * base)))
+    point_radius = max(2, int(round(3.0 * base)))
+    skeleton_thickness = max(2, int(round(2.0 * base)))
+    return font_scale, text_thickness, point_radius, skeleton_thickness
+
+
+def draw_to_numpy(image: Image.Image, results: list[Result], draw_skeleton: bool = True):
+    im_np = np.array(image, copy=True)
+    font_scale, text_thickness, point_radius, line_thickness = get_draw_params(im_np.shape)
 
     for res in results:
         kpts, vis = _decode_keypoints(res.keypoints)
@@ -77,11 +87,10 @@ def draw_pose(image: Image.Image, results, radius=3, line_thickness=2, draw_skel
 
         kpts = kpts.astype(np.int32)
         vis = np.isfinite(vis) & (vis > 0)
-        color = (0, 255, 0)
 
         for idx, (x, y) in enumerate(kpts):
             if vis[idx]:
-                cv2.circle(im_np, (int(x), int(y)), radius, color, -1)
+                cv2.circle(im_np, (int(x), int(y)), point_radius, (0, 255, 0), -1)
 
         if draw_skeleton:
             for a, b in COCO_SKELETON:
@@ -98,28 +107,32 @@ def draw_pose(image: Image.Image, results, radius=3, line_thickness=2, draw_skel
             text,
             (int(min_xy[0]), int(max(min_xy[1] - 5, 10))),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
+            font_scale,
             (255, 255, 255),
-            2,
+            text_thickness,
+            cv2.LINE_AA,
         )
 
-    return Image.fromarray(im_np.astype(np.uint8))
+    return im_np
+
+
+def draw_pose(image: Image.Image, results: list[Result], draw_skeleton: bool = True):
+    return Image.fromarray(draw_to_numpy(image, results, draw_skeleton=draw_skeleton).astype(np.uint8))
 
 
 def _parse_pose_outputs(outputs):
     if not isinstance(outputs, (tuple, list)) or len(outputs) != 3:
-        raise RuntimeError(f'Unexpected pose model outputs. Expected (scores, labels, keypoints), got type={type(outputs)}')
+        raise RuntimeError(f"Unexpected pose model outputs. Expected (scores, labels, keypoints), got type={type(outputs)}")
     scores, labels, keypoints = outputs
     return scores, labels, keypoints
 
 
 class ECPoseInferencer:
-    def __init__(self, model, device, size, thresh, half=True):
+    def __init__(self, model, device, size, thresh):
         self.model = model
         self.device = device
         self.size = size
         self.thresh = thresh
-        self.half = half
         self.transforms = T.Compose([
             T.Resize(self.size),
             T.ToTensor(),
@@ -127,42 +140,27 @@ class ECPoseInferencer:
         ])
 
     @torch.no_grad()
-    def infer_batch(self, images):
-        orig_sizes = torch.tensor(
-            [[img.size[0], img.size[1]] for img in images],
-            device=self.device,
-            dtype=torch.int64,
-        )
-        tensors = torch.stack([self.transforms(img) for img in images]).to(self.device)
-
-        device_type = self.device.type if self.device.type != 'cpu' else 'cpu'
-        with torch.autocast(device_type=device_type, enabled=(device_type == 'cuda' and self.half)):
-            outputs = self.model(tensors, orig_sizes)
-
+    def infer(self, image: Image.Image):
+        orig_sizes = torch.tensor([[image.size[0], image.size[1]]], device=self.device, dtype=torch.int64)
+        tensor = self.transforms(image).unsqueeze(0).to(self.device)
+        outputs = self.model(tensor, orig_sizes)
         scores, labels, keypoints = _parse_pose_outputs(outputs)
 
-        batch_results = []
-        for i in range(len(images)):
-            keep = scores[i] > self.thresh
-            scs = scores[i][keep]
-            lbs = labels[i][keep]
-            kps = keypoints[i][keep]
+        keep = scores[0] > self.thresh
+        scs = scores[0][keep]
+        lbs = labels[0][keep]
+        kps = keypoints[0][keep]
 
-            results = []
-            for j in range(len(scs)):
-                results.append(Result(
+        results = []
+        for j in range(len(scs)):
+            results.append(
+                Result(
                     label=int(lbs[j].item()),
                     score=float(scs[j].item()),
                     keypoints=kps[j].detach().cpu().numpy(),
-                ))
-
-            batch_results.append(results)
-
-        return batch_results
-
-    @torch.no_grad()
-    def infer(self, image):
-        return self.infer_batch([image])[0]
+                )
+            )
+        return results
 
 
 class VideoReader(threading.Thread):
@@ -190,10 +188,10 @@ class VideoReader(threading.Thread):
             self.q.get()
 
 
-def process_image(inferencer, path: Path, radius=3, line_thickness=2, draw_skeleton=True):
-    image = Image.open(path).convert('RGB')
+def process_image(inferencer: ECPoseInferencer, path: Path, draw_skeleton: bool = True):
+    image = Image.open(path).convert("RGB")
     results = inferencer.infer(image)
-    image = draw_pose(image, results, radius=radius, line_thickness=line_thickness, draw_skeleton=draw_skeleton)
+    image = draw_pose(image, results, draw_skeleton=draw_skeleton)
 
     output_path = path.with_stem(f"{path.stem}_torch_pose_inference")
     image.save(output_path, quality=95, subsampling=0)
@@ -201,84 +199,99 @@ def process_image(inferencer, path: Path, radius=3, line_thickness=2, draw_skele
     print(f"Detected {len(results)} poses")
 
 
-def process_video(inferencer, path: Path, batch_size=8, num_workers=4, radius=3, line_thickness=2, draw_skeleton=True):
+def process_image_dir(inferencer: ECPoseInferencer, dir_path: Path, draw_skeleton: bool = True):
+    image_paths = sorted([p for p in dir_path.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTS])
+    if not image_paths:
+        raise ValueError(f"No image files found in directory: {dir_path}")
+
+    print(f"Found {len(image_paths)} images in {dir_path}")
+    for idx, img_path in enumerate(image_paths, start=1):
+        print(f"[{idx}/{len(image_paths)}] Processing {img_path.name}")
+        process_image(inferencer, img_path, draw_skeleton=draw_skeleton)
+
+
+def process_video(inferencer: ECPoseInferencer, path: Path, num_workers: int = 4, draw_skeleton: bool = True):
     cap = cv2.VideoCapture(str(path))
+    if not cap.isOpened():
+        raise RuntimeError(f"Failed to open video: {path}")
+
     total_frame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS)
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     output_path = path.with_stem(f"{path.stem}_torch_pose_inference")
-    out = cv2.VideoWriter(str(output_path), cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
+    out = cv2.VideoWriter(str(output_path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
+    if not out.isOpened():
+        cap.release()
+        raise RuntimeError(f"Failed to create output video writer: {output_path}")
 
     reader = VideoReader(cap)
     reader.start()
 
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=num_workers)
-    futures_queue = queue.Queue()
+    futures_queue = queue.Queue(maxsize=max(32, num_workers * 4))
 
-    def process_and_draw(pil_img, results):
-        res_img = draw_pose(
-            pil_img,
-            results,
-            radius=radius,
-            line_thickness=line_thickness,
-            draw_skeleton=draw_skeleton,
-        )
-        return cv2.cvtColor(np.array(res_img), cv2.COLOR_RGB2BGR)
+    def process_and_draw(pil_img: Image.Image, results: list[Result]):
+        res_np = draw_to_numpy(pil_img, results, draw_skeleton=draw_skeleton)
+        return cv2.cvtColor(res_np, cv2.COLOR_RGB2BGR)
 
     frame_count = 0
+    writer_error: dict[str, Exception | None] = {"exc": None}
 
     def writer_worker():
         nonlocal frame_count
-        while True:
-            future = futures_queue.get()
-            if future is None:
-                break
-            frame_out = future.result()
-            out.write(frame_out)
-            frame_count += 1
-            if frame_count % 10 == 0:
-                print(f"Processed {frame_count}/{total_frame} frames")
+        try:
+            while True:
+                future = futures_queue.get()
+                if future is None:
+                    break
+                frame_out = future.result()
+                out.write(frame_out)
+                frame_count += 1
+                if frame_count % 10 == 0:
+                    print(f"Processed {frame_count}/{total_frame} frames")
+        except Exception as exc:  # noqa: BLE001
+            writer_error["exc"] = exc
 
     writer_thread = threading.Thread(target=writer_worker, daemon=True)
     writer_thread.start()
 
-    buffer_pil = []
-    while True:
-        frame = reader.read()
-        if frame is None:
-            break
-        buffer_pil.append(Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
+    try:
+        while True:
+            if writer_error["exc"] is not None:
+                raise writer_error["exc"]
 
-        if len(buffer_pil) == batch_size:
-            results_batch = inferencer.infer_batch(buffer_pil)
-            for pil_img, results in zip(buffer_pil, results_batch):
-                futures_queue.put(executor.submit(process_and_draw, pil_img, results))
-            buffer_pil = []
+            frame = reader.read()
+            if frame is None:
+                break
 
-    if buffer_pil:
-        results_batch = inferencer.infer_batch(buffer_pil)
-        for pil_img, results in zip(buffer_pil, results_batch):
-            futures_queue.put(executor.submit(process_and_draw, pil_img, results))
+            pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            results = inferencer.infer(pil_img)
+            future = executor.submit(process_and_draw, pil_img, results)
+            futures_queue.put(future)
+    finally:
+        reader.stop()
+        futures_queue.put(None)
+        writer_thread.join()
+        executor.shutdown()
+        cap.release()
+        out.release()
 
-    reader.stop()
-    futures_queue.put(None)
-    writer_thread.join()
-    executor.shutdown()
-    cap.release()
-    out.release()
+    if writer_error["exc"] is not None:
+        raise writer_error["exc"]
+
     print(f"Saved video result to {output_path}")
 
 
 def build_model(config_path: str, resume_path: str, device: torch.device):
     cfg = YAMLConfig(config_path, resume=resume_path)
 
-    if 'ViTAdapter' in cfg.yaml_cfg:
-        cfg.yaml_cfg['ViTAdapter']['skip_load_backbone'] = True
+    if "ViTAdapter" in cfg.yaml_cfg:
+        cfg.yaml_cfg["ViTAdapter"]["skip_load_backbone"] = True
 
-    checkpoint = torch.load(resume_path, map_location='cpu', weights_only=False)
-    state = checkpoint['ema']['module'] if 'ema' in checkpoint else checkpoint['model']
+    checkpoint = torch.load(resume_path, map_location="cpu", weights_only=False)
+    state = checkpoint["ema"]["module"] if "ema" in checkpoint else checkpoint["model"]
     cfg.model.load_state_dict(state)
 
     class Model(nn.Module):
@@ -293,58 +306,56 @@ def build_model(config_path: str, resume_path: str, device: torch.device):
 
     model = Model().to(device)
     model.eval()
-    return model, tuple(cfg.yaml_cfg['eval_spatial_size']), cfg.yaml_cfg.get('task', '')
+    return model, tuple(cfg.yaml_cfg["eval_spatial_size"]), cfg.yaml_cfg.get("task", "")
 
 
 def main(args):
     device = torch.device(args.device)
     model, img_size, task = build_model(args.config, args.resume, device)
-    if task != 'pose':
+    if task != "pose":
         print(f"Warning: config task is '{task}', script is specialized for pose inference.")
-
-    if device.type == 'cuda' and not args.fp32:
-        model = model.half()
 
     inferencer = ECPoseInferencer(
         model=model,
         device=device,
         size=img_size,
         thresh=args.thresh,
-        half=(device.type == 'cuda' and not args.fp32),
     )
 
     input_path = Path(args.input)
-    if input_path.suffix.lower() in IMAGE_SUFFIXES:
+    if not input_path.exists():
+        raise FileNotFoundError(f"Input path does not exist: {input_path}")
+
+    if input_path.is_dir():
+        process_image_dir(
+            inferencer,
+            input_path,
+            draw_skeleton=not args.no_skeleton,
+        )
+    elif input_path.suffix.lower() in IMAGE_EXTS:
         process_image(
             inferencer,
             input_path,
-            radius=args.kpt_radius,
-            line_thickness=args.kpt_line_thickness,
             draw_skeleton=not args.no_skeleton,
         )
     else:
         process_video(
             inferencer,
             input_path,
-            batch_size=args.batch_size,
-            radius=args.kpt_radius,
-            line_thickness=args.kpt_line_thickness,
+            num_workers=args.num_workers,
             draw_skeleton=not args.no_skeleton,
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description='ECPose Torch Inference')
-    parser.add_argument('-c', '--config', required=True, type=str)
-    parser.add_argument('-r', '--resume', required=True, type=str)
-    parser.add_argument('-i', '--input', required=True, type=str)
-    parser.add_argument('-d', '--device', default='cuda:0', type=str)
-    parser.add_argument('-t', '--thresh', default=0.4, type=float)
-    parser.add_argument('-b', '--batch-size', default=8, type=int, help='Batch size for video inference')
-    parser.add_argument('--fp32', action='store_true', help='Use FP32 precision instead of FP16')
-    parser.add_argument('--kpt-radius', type=int, default=3, help='Radius of rendered keypoints')
-    parser.add_argument('--kpt-line-thickness', type=int, default=2, help='Line thickness for skeleton links')
-    parser.add_argument('--no-skeleton', action='store_true', help='Draw keypoints only, no skeleton links')
+    parser = argparse.ArgumentParser(description="ECPose Torch Inference")
+    parser.add_argument("-c", "--config", required=True, type=str)
+    parser.add_argument("-r", "--resume", required=True, type=str)
+    parser.add_argument("-i", "--input", required=True, type=str, help="Image path, image directory path, or video path")
+    parser.add_argument("-d", "--device", default="cuda:0", type=str)
+    parser.add_argument("-t", "--thresh", default=0.4, type=float)
+    parser.add_argument("--num-workers", type=int, default=2, help="Thread workers for video draw/write")
+    parser.add_argument("--no-skeleton", action="store_true", help="Draw keypoints only, no skeleton links")
     main(parser.parse_args())

@@ -47,7 +47,7 @@ class PostProcessor(nn.Module):
     # def forward(self, outputs, orig_target_sizes):
     def forward(self, outputs, orig_target_sizes: torch.Tensor):
         logits, boxes = outputs['pred_logits'], outputs['pred_boxes']
-        masks = outputs.get('pred_masks', None)
+        mask_pred = outputs.get('pred_masks', None)
 
         # orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
 
@@ -62,6 +62,8 @@ class PostProcessor(nn.Module):
             labels = mod(index, self.num_classes)
             index = index // self.num_classes
             boxes = bbox_pred.gather(dim=1, index=index.unsqueeze(-1).repeat(1, 1, bbox_pred.shape[-1]))
+            masks = mask_pred.gather(dim=1, index=index.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, mask_pred.shape[-2], 
+                                                                                           mask_pred.shape[-1])) if mask_pred is not None else None
 
         else:
             scores = F.softmax(logits)[:, :, :-1]
@@ -72,7 +74,7 @@ class PostProcessor(nn.Module):
                 boxes = torch.gather(boxes, dim=1, index=index.unsqueeze(-1).tile(1, 1, boxes.shape[-1]))
 
         if self.deploy_mode:
-            if masks is not None:
+            if mask_pred is not None:
                 return labels, boxes, scores, masks
             return labels, boxes, scores
 
@@ -82,15 +84,13 @@ class PostProcessor(nn.Module):
                 .to(boxes.device).reshape(labels.shape)
 
         results = []
-        if masks is not None:
-            for i in range(masks.shape[0]):
-                res_i = {'scores': scores[i], 'labels': labels[i], 'boxes': boxes[i]}
-                k_idx = index[i]
-                masks_i = torch.gather(masks[i], 0, k_idx.unsqueeze(-1).unsqueeze(-1).repeat(1, masks.shape[-2], masks.shape[-1]))  # [K, Hm, Wm]
+        if mask_pred is not None:
+            for (i, (s, l, b, m)) in enumerate(zip(scores, labels, boxes, masks)):
+                res = {'scores': s, 'labels': l, 'boxes': b}
                 w, h = orig_target_sizes[i].tolist()
-                masks_i = F.interpolate(masks_i.unsqueeze(1), size=(int(h), int(w)), mode='bilinear', align_corners=False)  # [K,1,H,W]
-                res_i['masks'] = masks_i > 0.0
-                results.append(res_i)
+                m = F.interpolate(m.unsqueeze(1), size=(int(h), int(w)), mode='bilinear', align_corners=False)
+                res['masks'] = m > 0.0
+                results.append(res)
         else:
             results = [{'scores': s, 'labels': l, 'boxes': b} for s, l, b in zip(scores, labels, boxes)]
 

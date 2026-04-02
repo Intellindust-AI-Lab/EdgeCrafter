@@ -2,7 +2,7 @@
 Task-Specialized Distillation</h1>
 
 <h3 align="center">
-  <b>English</b> | <a href="README_zh.md">简体中文</a>
+  <a href="README.md">English</a> | <b>简体中文</b>
 </h3>
 
 <p align="center">
@@ -34,30 +34,29 @@ Task-Specialized Distillation</h1>
   <img src=".github/teaser.png">
 </p>
 
-
 ---
 
-## 🚀 Updates
+## 🚀 更新日志
 
-- **[2026-03-21]** <a href="https://huggingface.co/Intellindust">We have uploaded our models on 🤗 Hugging Face</a>.
-- **[2026-03-19]** Initial release of EdgeCrafter.
+- **[2026-03-21]** <a href="https://huggingface.co/Intellindust">模型已发布至 🤗 Hugging Face</a>。
+- **[2026-03-19]** EdgeCrafter 初始版本正式发布。
 
 ---
 
 ## 🤗 Hugging Face
 
-<a href="https://huggingface.co/Intellindust">We have uploaded our models on 🤗 Hugging Face</a>! You can also access these models via [hf_models.ipynb](./hf_models.ipynb). Have a try!
+模型已在 <a href="https://huggingface.co/Intellindust">🤗 Hugging Face</a> 开放下载！也可以通过 [hf_models.ipynb](./hf_models.ipynb) 快速调用模型。欢迎尝试！
 
 ---
 
-## 📍 Reproducing the Results
+## 📍 结果复现
 
-- **Detection & Instance Segmentation:** [Instructions](./ecdetseg)
-- **Pose Estimation:** [Instructions](./ecpose)
+- **目标检测与实例分割：** [复现指南](./ecdetseg)
+- **姿态估计：** [复现指南](./ecpose)
 
 ---
 
-## 🏆 Model Zoo
+## 🏆 模型库
 
 ### COCO2017 Validation Results
 
@@ -91,44 +90,44 @@ Task-Specialized Distillation</h1>
 | **ECPose-X** | 640 | 74.8 |  51 | 172 | 14.31 | [config](ecpose/configs/ecpose/ecpose_x_coco.yml) | [log](https://github.com/capsule2077/edgecrafter/raw/refs/heads/main/logs/ecpose_x.log) | [model](https://github.com/capsule2077/edgecrafter/releases/download/edgecrafterv1/ecpose_x.pth) |
 ---
 
-## 📦 Installation
+## 📦 安装
 
 ```bash
-# Create conda environment
+# 创建并激活 conda 环境
 conda create -n ec python=3.11 -y
 conda activate ec
 
-# Install dependencies
+# 安装依赖
 pip install -r requirements.txt
 ```
 
-### ⚡ Quick Start (Inference)
-The easiest way to test EdgeCrafter is to run inference on a sample image using a pre-trained model.
+### ⚡ 快速上手（模型推理）
+可以通过预训练模型对示例图像进行推理，以快速测试 EdgeCrafter 的性能。
 ```bash
-# 1. Download a pre-trained model (e.g., ECDet-L)
+# 1. 进入对应目录并下载预训练权重（以 ECDet-L 为例）
 cd ecdetseg
 wget https://github.com/capsule2077/edgecrafter/releases/download/edgecrafterv1/ecdet_l.pth
-# 2. Run PyTorch inference
-# Make sure to replace `path/to/your/image.jpg` with an actual image path
+
+# 2. 运行 PyTorch 推理
+# 请将 `path/to/your/image.jpg` 替换为实际图像的路径
 python tools/inference/torch_inf.py -c configs/ecdet/ecdet_l.yml -r ecdet_l.pth -i path/to/your/image.jpg
 ```
 
+## 📄 开源协议
 
-## 📄 License
-
-This project is released under the [Apache 2.0 License](./LICENSE).
+本项目遵循 [Apache 2.0 许可证](./LICENSE) 开源。
 
 ---
 
-## 🙏 Acknowledgements
+## 🙏 致谢
 
-We thank the authors of the following open-source projects that made this work possible: [RT-DETR](https://github.com/lyuwenyu/RT-DETR), [D-FINE](https://github.com/Peterande/D-FINE), [DEIM](https://github.com/Intellindust-AI-Lab/DEIM), [lightly-train](https://github.com/lightly-ai/lightly-train), [DETRPose](https://github.com/SebastianJanampa/DETRPose), [RF-DETR](https://github.com/roboflow/rf-detr), [DINOv3](https://github.com/facebookresearch/dinov3)
+感谢以下开源项目为本工作提供的支持与启发：[RT-DETR](https://github.com/lyuwenyu/RT-DETR)、[D-FINE](https://github.com/Peterande/D-FINE)、[DEIM](https://github.com/Intellindust-AI-Lab/DEIM)、[lightly-train](https://github.com/lightly-ai/lightly-train)、[DETRPose](https://github.com/SebastianJanampa/DETRPose)、[RF-DETR](https://github.com/roboflow/rf-detr)、[DINOv3](https://github.com/facebookresearch/dinov3)
 
 --- 
 
-## 📚 Citation
+## 📚 引用
 
-If you find this project useful in your research, please consider citing:
+如果您在研究中使用了本项目，请引用：
 
 ```bibtex
 @article{liu2026edgecrafter,

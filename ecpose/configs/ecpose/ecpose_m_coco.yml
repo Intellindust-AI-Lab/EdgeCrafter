@@ -9,7 +9,7 @@ output_dir: outputs/ecpose_m
 ViTAdapter:
   name: ecpose_vittplus
   embed_dim: 256
-  weights_path: ecpose_vittplus.pth
+  weights_path: ecvits/ecpose_vittplus.pth
   interaction_indexes: [10, 11]  
   num_heads: 4
 
@@ -35,16 +35,14 @@ optimizer:
   type: AdamW
   params: 
     -
-      # except norm/bn/bias in self.dinov3
+      
       params: '^(?=.*.backbone)(?!.*(?:norm|bn|bias)).*$'  
       lr: 0.000025
     -
-      # including norm/bn/bias in self.dinov3
       params: '^(?=.*.backbone)(?=.*(?:norm|bn|bias)).*$'  
       lr: 0.000025
       weight_decay: 0.
     - 
-      # including norm/bn/bias except for the self.dinov3
       params: '^(?!.*\.backbone)(?=.*(?:norm|bn|bias)).*$'
       weight_decay: 0.
 

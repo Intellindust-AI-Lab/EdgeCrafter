@@ -1,3 +1,7 @@
+<h3 align="center">
+  <b>English</b> | <a href="README_zh.md">简体中文</a>
+</h3>
+
 ## 📋 Table of Contents
 - [Model Zoo](#-model-zoo)
 - [Dataset Preparation](#-dataset-preparation)
@@ -25,6 +29,16 @@
 
 ```bash
 pip install -r requirements.txt
+```
+
+### ⚡ Quick Start (Inference)
+The easiest way to test ECPose is to run inference on a sample image using a pre-trained model.
+```bash
+# 1. Download a pre-trained model (e.g., ECPose-L)
+wget https://github.com/capsule2077/edgecrafter/releases/download/edgecrafterv1/ecpose_l.pth
+# 2. Run PyTorch inference
+# Make sure to replace `path/to/your/image.jpg` with an actual image path
+python tools/inference/torch_inf.py -c configs/ecpose/ecpose_l_coco.yml -r ecpose_l.pth -i path/to/your/image.jpg
 ```
 
 ## 📁 Dataset Preparation
@@ -69,18 +83,68 @@ Use the same format as COCO keypoints and adapt `configs/dataset/coco_pose.yml`:
 
 ## 🔌 Model Configuration
 
-Model configs are in [`configs/ecpose`](./configs/ecpose/):
+Model configs are in [`configs/ecpose`](./configs/ecpose/), e.g. [ecpose_s_coco.yml](./configs/ecpose/ecpose_s_coco.yml):
 
-- [`ecpose_s_coco.yml`](./configs/ecpose/ecpose_s_coco.yml)
-- [`ecpose_m_coco.yml`](./configs/ecpose/ecpose_m_coco.yml)
-- [`ecpose_l_coco.yml`](./configs/ecpose/ecpose_l_coco.yml)
-- [`ecpose_x_coco.yml`](./configs/ecpose/ecpose_x_coco.yml)
+```yaml
+__include__: [
+  '../dataset/coco_pose.yml',
+  'ecpose.yml'
+]
 
-Base model definition is in [`ecpose.yml`](./configs/ecpose/ecpose.yml) with:
 
-- `task: pose`
-- `model: ECPose`
-- postprocess outputs `(scores, labels, keypoints)`
+output_dir: outputs/ecpose_s
+
+ViTAdapter:
+  name: ecpose_vitt
+  embed_dim: 192
+  weights_path: ecvits/ecpose_vitt.pth    # Pretrained backbone; automatically downloaded on first use.
+  interaction_indexes: [10, 11]
+  num_heads: 3
+
+eval_spatial_size: [640, 640]   # Input Resolution
+
+epoches: 92  # Total training epochs.
+grad_accum_steps: 1
+
+
+## Optimizer
+optimizer:
+  type: AdamW
+  params: 
+    -
+      params: '^(?=.*.backbone)(?!.*(?:norm|bn|bias)).*$'  # Backbone parameters excluding normalization layers and bias
+      lr: 0.000025
+    -
+      params: '^(?=.*.backbone)(?=.*(?:norm|bn|bias)).*$'  # Backbone normalization layers (norm/bn) and bias parameters
+      lr: 0.000025
+      weight_decay: 0.
+    - 
+      params: '^(?!.*\.backbone)(?=.*(?:norm|bn|bias)).*$'  # Non-backbone normalization layers and bias parameters
+      weight_decay: 0.
+
+  lr: 0.0005  # Base learning rate for non-backbone parameters
+  betas: [0.9, 0.999]
+  weight_decay: 0.0001
+
+train_dataloader: 
+  dataset: 
+    transforms:
+      ops:
+        - {type: PoseMosaic, output_size: 320}
+        - {type: MixUpCopyPaste, mixup_prob: 0.5}
+        - {type: RandomZoomOut, p: 0.5}
+        - {type: RandomHorizontalFlip}
+        - {type: ColorJitter}
+        - {type: Resize, size: [640, 640]}
+        - {type: ToTensor}
+        - {type: Normalize, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]} 
+      mosaic_prob: 0.5  # Probability of applying Mosaic augmentation
+      policy:
+        epoch: [4, 45, 90]   # Mosaic starts at epoch 4, stops at epoch 45, and all augmentations are disabled at epoch 90.
+       
+  collate_fn:
+    stop_epoch: 90  # all augmentations are disabled at epoch 90.
+```
 
 ---
 
@@ -123,7 +187,7 @@ python tools/inference/torch_inf.py \
   -i /path/to/image_or_video
 ```
 
-Optional flags: `-d cuda:0`, `-t 0.4`, `--fp32`, `--no-skeleton`.
+Optional flags: `-d cuda:0`, `-t 0.4`, `--no-skeleton`.
 
 ### ONNX Export
 

@@ -13,7 +13,7 @@ ViTAdapter:
   proj_dim: 256
   interaction_indexes: [10, 11]
   ffn_ratio: 6  
-  weights_path: weights/ecpose_vitsplus.pth
+  weights_path: ecvits/ecpose_vitsplus.pth
 
 HybridEncoder:
   in_channels: [256, 256, 256]

@@ -13,7 +13,7 @@ ViTAdapter:
   num_heads: 6
   proj_dim: 256
   interaction_indexes: [10, 11]  
-  weights_path: weights/ecdet_l_coco_backbone.pth
+  weights_path: ecvits/ecpose_vits.pth
 
 HybridEncoder:
   in_channels: [256, 256, 256]
