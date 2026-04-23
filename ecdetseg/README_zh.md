@@ -188,8 +188,8 @@ lr_gamma: 0.5             # 学习率衰减率
 eval_spatial_size: [640, 640]  # 训练及评估的输入分辨率 (H, W)。高分辨率训练建议设为 [1280, 1280]
 
 train_dataloader:
+  total_batch_size: 32      # 全局 Batch Size（需根据显存容量调整）
   dataset:
-    total_batch_size: 32      # 全局 Batch Size（需根据显存容量调整）
     transforms:
       mosaic_epoch: 36        # Mosaic 增强截止轮次。通常建议设为 stop_epoch 的一半。
       mosaic_prob: 0.75       # Mosaic 增强触发概率

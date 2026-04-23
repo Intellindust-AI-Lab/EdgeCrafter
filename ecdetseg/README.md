@@ -191,8 +191,8 @@ lr_gamma: 0.5             # Learning rate decay factor during LR scheduling
 eval_spatial_size: [640, 640]  # Input resolution for training/evaluation (height, width). Use [1280,1280] for high-resolution training
 
 train_dataloader:
+  total_batch_size: 32      # Global batch size across all GPUs (adjust depending on GPU memory)
   dataset:
-    total_batch_size: 32      # Global batch size across all GPUs (adjust depending on GPU memory)
     transforms:
       mosaic_epoch: 36        # Apply Mosaic augmentation until this epoch. Recommended to set this to half of stop_epoch
       mosaic_prob: 0.75       # Probability of applying Mosaic augmentation
