@@ -29,7 +29,7 @@ def load_config(file_path, cfg=dict()):
     assert ext in ['.yml', '.yaml'], "only support yaml files"
 
     with open(file_path) as f:
-        file_cfg = yaml.load(f, Loader=yaml.Loader)
+        file_cfg = yaml.load(f, Loader=yaml.SafeLoader)
         if file_cfg is None:
             return {}
 
@@ -86,7 +86,7 @@ def parse_cli(nargs: List[str]) -> Dict:
     for s in nargs:
         s = s.strip()
         k, v = s.split('=', 1)
-        d = dictify(k, yaml.load(v, Loader=yaml.Loader))
+        d = dictify(k, yaml.load(v, Loader=yaml.SafeLoader))
         cfg = merge_dict(cfg, d)
 
     return cfg
