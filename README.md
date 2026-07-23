@@ -38,6 +38,7 @@ Task-Specialized Distillation</h1>
 ---
 
 ## 🚀 Updates
+- **[2026-07-23]** EdgeCrafter has been integrated into [LightlyTrain](https://docs.lightly.ai/train/stable/pretrain_distill/models/edgecrafter.html)
 - **[2026-07-22]** EdgeCrafter has been integrated into [LibreYOLO](https://www.libreyolo.com/zh).
 - **[2026-04-20]** Our previous version [DEIMv2](https://github.com/Intellindust-AI-Lab/DEIMv2) was used by two winning teams at the [CVPR 2026 Maritime Computer Vision Workshop](https://arxiv.org/abs/2604.13244), taking home 2nd place in Thermal Object Detection Challenge and 3rd place in Vision-to-Chart Data Association Challenge.
 - **[2026-03-21]** <a href="https://huggingface.co/Intellindust">We have uploaded our models on 🤗 Hugging Face</a>.
