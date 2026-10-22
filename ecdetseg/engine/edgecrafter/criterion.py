@@ -75,7 +75,7 @@ class ECCriterion(nn.Module):
         target_classes[idx] = target_classes_o
         target = F.one_hot(target_classes, num_classes=self.num_classes+1)[..., :-1]
         loss = torchvision.ops.sigmoid_focal_loss(src_logits, target, self.alpha, self.gamma, reduction='none')
-        loss = loss.mean(1).sum() * src_logits.shape[1] / num_boxes
+        loss = loss.sum() / num_boxes
 
         return {'loss_focal': loss}
 
@@ -105,7 +105,7 @@ class ECCriterion(nn.Module):
         weight = self.alpha * pred_score.pow(self.gamma) * (1 - target) + target_score
 
         loss = F.binary_cross_entropy_with_logits(src_logits, target_score, weight=weight, reduction='none')
-        loss = loss.mean(1).sum() * src_logits.shape[1] / num_boxes
+        loss = loss.sum() / num_boxes
         return {'loss_vfl': loss}
 
     def loss_labels_mal(self, outputs, targets, indices, num_boxes, values=None):
@@ -138,7 +138,7 @@ class ECCriterion(nn.Module):
             weight = pred_score.pow(self.gamma) * (1 - target) + target
 
         loss = F.binary_cross_entropy_with_logits(src_logits, target_score, weight=weight, reduction='none')
-        loss = loss.mean(1).sum() * src_logits.shape[1] / num_boxes
+        loss = loss.sum() / num_boxes
         return {'loss_mal': loss}
 
     def loss_boxes(self, outputs, targets, indices, num_boxes, boxes_weight=None):
