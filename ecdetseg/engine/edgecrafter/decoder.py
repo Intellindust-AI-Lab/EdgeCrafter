@@ -754,6 +754,8 @@ class ECTransformer(nn.Module):
 
         s_idx = dn_meta['dn_num_split'] if dn_meta is not None else None
 
+        pred_segs = pre_segs
+
         if self.training and dn_meta is not None:
             dn_pre_logits, pre_logits = self._split(pre_logits, 1, s_idx)
             dn_pre_bboxes, pre_bboxes = self._split(pre_bboxes, 1, s_idx)
